@@ -11,4 +11,4 @@ const getUserService = async () => {
 
 }
 
-module.exports = { getUserService } 
+module.exports = { getUserService }
