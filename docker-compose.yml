@@ -1,0 +1,30 @@
+version: "3.8"
+
+services:
+  product-service:
+    build: ./product-service
+    ports:
+      - "4002:4002"
+    depends_on:
+      - mongodb
+    env_file:
+      - ./product-service/.env
+    networks:
+      - mynetwork
+
+  mongodb:
+    image: mongo
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    networks:
+      - mynetwork
+    volumes:
+      - mongo-data:/data/db
+
+networks:
+  mynetwork:
+
+
+volumes:
+  mongo-data:
