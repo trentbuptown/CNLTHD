@@ -6,3 +6,6 @@ https://docs.google.com/document/d/1P8Kzh7VchAihgo5JU-B7n0PqpcNE4VlC_yAyY4qMi04/
 
 # công nghệ microservices
 https://docs.google.com/document/d/14rIAmNs-4iIXVi2egSPS7Zjkn4DpfM5Lc3dxCg0pETs/edit?usp=sharing
+
+# Báo cáo
+https://docs.google.com/document/d/1VAcZQiljFgW9XYz5dI6hufWXNh_kclvYBTMaxKsxYoM/edit?usp=sharing
