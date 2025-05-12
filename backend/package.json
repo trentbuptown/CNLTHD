@@ -1,0 +1,26 @@
+{
+    "name": "digizone-microservices",
+    "version": "1.0.0",
+    "description": "DigiZone Backend Microservices",
+    "scripts": {
+        "start": "concurrently \"npm run start:user\" \"npm run start:product\" \"npm run start:order\" \"npm run start:payment\" \"npm run start:gateway\"",
+        "start:user": "cd user-service && npm start",
+        "start:product": "cd product-service && npm start",
+        "start:order": "cd order-service && npm start",
+        "start:payment": "cd payment-service && npm start",
+        "start:gateway": "cd gateway && npm start",
+        "setup": "npm install && npm run setup:services",
+        "setup:services": "concurrently \"npm run setup:user\" \"npm run setup:product\" \"npm run setup:order\" \"npm run setup:payment\" \"npm run setup:gateway\"",
+        "setup:user": "cd user-service && npm install",
+        "setup:product": "cd product-service && npm install",
+        "setup:order": "cd order-service && npm install",
+        "setup:payment": "cd payment-service && npm install",
+        "setup:gateway": "cd gateway && npm install"
+    },
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "concurrently": "^8.2.0",
+        "digizone-microservices": "file:"
+    }
+}

@@ -1,0 +1,60 @@
+version: '3'
+
+services:
+  gateway:
+    build: ./gateway
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+    depends_on:
+      - user-service
+      - product-service
+      - order-service
+      - payment-service
+    networks:
+      - digizone-network
+
+  user-service:
+    build: ./user-service
+    environment:
+      - PORT=3001
+      - MONGO_URI=mongodb+srv://cnlthd:2003@microservice.qvhvt9f.mongodb.net/user-service
+    ports:
+      - "3001:3001"
+    networks:
+      - digizone-network
+
+  product-service:
+    build: ./product-service
+    environment:
+      - PORT=3002
+      - MONGO_URI=mongodb+srv://cnlthd:2003@microservice.qvhvt9f.mongodb.net/product-service
+    ports:
+      - "3002:3002"
+    networks:
+      - digizone-network
+
+  order-service:
+    build: ./order-service
+    environment:
+      - PORT=3003
+      - MONGO_URI=mongodb+srv://cnlthd:2003@microservice.qvhvt9f.mongodb.net/order-service
+    ports:
+      - "3003:3003"
+    networks:
+      - digizone-network
+
+  payment-service:
+    build: ./payment-service
+    environment:
+      - PORT=3004
+      - MONGO_URI=mongodb+srv://cnlthd:2003@microservice.qvhvt9f.mongodb.net/payment-service
+    ports:
+      - "3004:3004"
+    networks:
+      - digizone-network
+
+networks:
+  digizone-network:
+    driver: bridge
