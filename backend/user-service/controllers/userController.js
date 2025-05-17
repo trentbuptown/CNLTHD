@@ -189,4 +189,21 @@ exports.getUsers = async (req, res) => {
             message: error.message
         });
     }
+};
+
+// @desc    Logout user / clear cookie
+// @route   PUT /logout
+// @access  Public
+exports.logoutUser = async (req, res) => {
+    try {
+        res.status(200).json({
+            success: true,
+            message: 'Logged out successfully'
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
 }; 

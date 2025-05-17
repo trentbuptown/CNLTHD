@@ -7,10 +7,25 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middlewares
-app.use(cors());
-app.use(morgan('dev'));
+// Enhanced CORS configuration
+app.use(cors({
+    origin: ['http://localhost:8000', 'http://127.0.0.1:8000'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-TOKEN']
+}));
+
+// Enhanced logging
+app.use(morgan(':date[iso] :method :url :status :response-time ms - :res[content-length]'));
 app.use(express.json());
+
+// Log request bodies for debugging
+app.use((req, res, next) => {
+    if (req.method === 'POST') {
+        console.log(`Request body: ${JSON.stringify(req.body)}`);
+    }
+    next();
+});
 
 // Service routes configuration
 const services = {
@@ -32,12 +47,58 @@ const services = {
     }
 };
 
-// Set up proxies for each service
+// CSRF Token endpoint
+app.get('/api/csrf-token', (req, res) => {
+    // Generate a simple token or use a constant one for demonstration
+    const csrfToken = Date.now().toString(36) + Math.random().toString(36).substring(2);
+    res.json({
+        success: true,
+        message: 'CSRF token generated',
+        result: csrfToken
+    });
+});
+
+// Set up proxies for each service with enhanced options
 Object.entries(services).forEach(([service, config]) => {
     app.use(`/api/${service}`, createProxyMiddleware({
         target: config.url,
         changeOrigin: true,
-        pathRewrite: config.pathRewrite
+        pathRewrite: config.pathRewrite,
+        onProxyReq: (proxyReq, req, res) => {
+            // Safe access to req.path with fallback
+            const path = req.path || req.url || '';
+            console.log(`Proxying ${req.method} request to: ${config.url}${path.replace(new RegExp(`^/api/${service}`), '')}`);
+            // If body is JSON and already parsed, stringify it again
+            if (req.body && req.method !== 'GET') {
+                const bodyData = JSON.stringify(req.body);
+                proxyReq.setHeader('Content-Type', 'application/json');
+                proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+                // Write body data to request
+                proxyReq.write(bodyData);
+            }
+        },
+        onProxyRes: (proxyRes, req, res) => {
+            console.log(`Received response from ${req.method} ${req.path}: Status ${proxyRes.statusCode}`);
+            // Log the first part of the response
+            let responseBody = '';
+            const originalWrite = res.write;
+            const originalEnd = res.end;
+
+            res.write = function (chunk) {
+                responseBody += chunk.toString('utf8');
+                return originalWrite.apply(res, arguments);
+            };
+
+            res.end = function (chunk) {
+                if (chunk) {
+                    responseBody += chunk.toString('utf8');
+                }
+                console.log(`Response body sample: ${responseBody.substring(0, 200)}...`);
+                originalEnd.apply(res, arguments);
+            };
+        },
+        timeout: 60000, // 60 seconds timeout
+        proxyTimeout: 60000
     }));
 });
 
@@ -59,7 +120,17 @@ app.get('/', (req, res) => {
     });
 });
 
+// Error handling
+app.use((err, req, res, next) => {
+    console.error('Gateway error:', err);
+    res.status(500).json({
+        success: false,
+        message: 'Gateway Error',
+        error: err.message
+    });
+});
+
 // Start the server
-app.listen(PORT, () => {
-    console.log(`API Gateway running on port ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`API Gateway running on port ${PORT} (0.0.0.0)`);
 }); 

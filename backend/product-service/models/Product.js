@@ -18,7 +18,12 @@ const productSchema = new mongoose.Schema({
     category: {
         type: String,
         required: [true, 'Please provide a product category'],
-        enum: ['electronics', 'books', 'clothing', 'accessories', 'other']
+        enum: ['Computer', 'Mobile', 'All', 'Operating System', 'Application Software', 'electronics', 'books', 'clothing', 'accessories', 'other']
+    },
+    platformType: {
+        type: String,
+        enum: ['Windows', 'Android', 'iOS', 'Linux', 'Mac', ''],
+        default: ''
     },
     brand: {
         type: String,
@@ -29,6 +34,12 @@ const productSchema = new mongoose.Schema({
         required: [true, 'Please provide product stock'],
         min: [0, 'Stock cannot be negative'],
         default: 0
+    },
+    inStock: {
+        type: Boolean,
+        default: function () {
+            return this.stock > 0;
+        }
     },
     imageUrl: {
         type: String,

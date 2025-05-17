@@ -11,4 +11,10 @@ router.put('/orders/:id/pay', orderController.updateOrderToPaid);
 router.put('/orders/:id/deliver', orderController.updateOrderToDelivered);
 router.put('/orders/:id/status', orderController.updateOrderStatus);
 
+// Add root path to redirect to /orders endpoint
+router.get('/', (req, res) => {
+    // Just forward the request to the /orders endpoint
+    orderController.getOrders(req, res);
+});
+
 module.exports = router; 
