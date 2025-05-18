@@ -11,6 +11,7 @@ router.get('/orders/:id', orderController.getOrderById);
 router.put('/orders/:id/pay', orderController.updateOrderToPaid);
 router.put('/orders/:id/deliver', orderController.updateOrderToDelivered);
 router.put('/orders/:id/status', orderController.updateOrderStatus);
+router.put('/orders/:id/cancel', orderController.cancelOrder);
 router.delete('/orders/:id', orderController.deleteOrder);
 
 // Add checkout endpoint
@@ -36,16 +37,19 @@ router.get('/health', (req, res) => {
 // Add root-level user orders route
 router.get('/user/:userId', orderController.getUserOrders);
 
+// Add stats endpoint at root level - must be before the /:id route to prevent mismatching
+router.get('/stats', orderController.getOrderStats);
+
 // Add root-level individual order route
 router.get('/:id', orderController.getOrderById);
 
 // Add root-level order status update route to match the gateway's routing
 router.put('/:id/status', orderController.updateOrderStatus);
 
+// Add root-level order cancel route
+router.put('/:id/cancel', orderController.cancelOrder);
+
 // Add root-level delete order route
 router.delete('/:id', orderController.deleteOrder);
-
-// Add stats endpoint at root level
-router.get('/stats', orderController.getOrderStats);
 
 module.exports = router; 

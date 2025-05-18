@@ -125,6 +125,24 @@ app.get('/', (req, res) => {
     });
 });
 
+// Special endpoint for order stats to avoid route conflicts
+app.get('/api/orders/stats', async (req, res) => {
+    try {
+        console.log('Proxying order stats request to system-stats endpoint');
+        const orderServiceUrl = process.env.ORDER_SERVICE_URL || 'http://order-service:3003';
+        const axios = require('axios');
+        const response = await axios.get(`${orderServiceUrl}/system-stats`);
+        res.json(response.data);
+    } catch (error) {
+        console.error('Error fetching order stats:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch order statistics',
+            error: error.message
+        });
+    }
+});
+
 // Error handling
 app.use((err, req, res, next) => {
     console.error('Gateway error:', err);

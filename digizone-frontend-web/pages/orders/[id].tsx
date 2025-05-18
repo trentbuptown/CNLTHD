@@ -17,6 +17,7 @@ import { useEffect, useState } from 'react';
 import { Orders } from '../../services/order.service';
 import { Products } from '../../services/product.service';
 import { CURRENCY_SYMBOL, DEFAULT_IMAGE_URL } from '../../helper/settings';
+import { useRouter } from 'next/router';
 
 interface OrderProps {
 	order: any;
@@ -26,7 +27,9 @@ const Order: NextPage<OrderProps> = ({ order: initialOrder }) => {
 	const { addToast } = useToasts();
 	const [order, setOrder] = useState(initialOrder);
 	const [loading, setLoading] = useState(false);
+	const [cancelling, setCancelling] = useState(false);
 	const [products, setProducts] = useState<Record<string, any>>({});
+	const router = useRouter();
 
 	useEffect(() => {
 		if (!initialOrder || Object.keys(initialOrder).length === 0) {
@@ -143,6 +146,59 @@ const Order: NextPage<OrderProps> = ({ order: initialOrder }) => {
 		return name;
 	};
 
+	// Calculate if order can be cancelled (within 10 minutes of creation and not delivered/paid/cancelled)
+	const canCancelOrder = () => {
+		if (!order || !order.createdAt) return false;
+		if (order.isDelivered || order.isPaid || order.status === 'cancelled' || order.status === 'delivered') return false;
+
+		const orderTime = new Date(order.createdAt).getTime();
+		const currentTime = new Date().getTime();
+		const timeDiffMinutes = (currentTime - orderTime) / (1000 * 60);
+
+		return timeDiffMinutes <= 10;
+	};
+
+	// Handle order cancellation
+	const handleCancelOrder = async () => {
+		try {
+			setCancelling(true);
+			const orderId = order._id;
+
+			if (!orderId) {
+				addToast('Order ID not found', { appearance: 'error', autoDismiss: true });
+				return;
+			}
+
+			if (!confirm('Are you sure you want to cancel this order?')) {
+				setCancelling(false);
+				return;
+			}
+
+			const response = await Orders.cancelOrder(orderId);
+
+			if (response?.success) {
+				addToast('Order cancelled successfully', { appearance: 'success', autoDismiss: true });
+				// Update the order status in the UI
+				setOrder({ ...order, status: 'cancelled' });
+
+				// Option: redirect to my-account page after a short delay
+				setTimeout(() => {
+					router.push('/my-account');
+				}, 2000);
+			} else {
+				addToast(response?.message || 'Failed to cancel order', { appearance: 'error', autoDismiss: true });
+			}
+		} catch (error: any) {
+			console.error('Error cancelling order:', error);
+			addToast(error?.response?.data?.message || 'Error cancelling order. Please try again.', {
+				appearance: 'error',
+				autoDismiss: true,
+			});
+		} finally {
+			setCancelling(false);
+		}
+	};
+
 	return (
 		<>
 			{loading ? (
@@ -225,7 +281,7 @@ const Order: NextPage<OrderProps> = ({ order: initialOrder }) => {
 											Payment Method: {paymentMethod.toUpperCase()}
 										</ListGroup.Item>
 										<ListGroup.Item>
-											Order Status: <Badge bg={orderStatus === 'pending' ? 'warning' : 'success'}>{orderStatus.toUpperCase()}</Badge>
+											Order Status: <Badge bg={orderStatus === 'pending' ? 'warning' : orderStatus === 'cancelled' ? 'danger' : 'success'}>{orderStatus.toUpperCase()}</Badge>
 										</ListGroup.Item>
 										{shippingAddress && Object.keys(shippingAddress).length > 0 && (
 											<ListGroup.Item>
@@ -234,6 +290,20 @@ const Order: NextPage<OrderProps> = ({ order: initialOrder }) => {
 												{shippingAddress.city && <p>City: {shippingAddress.city}</p>}
 												{shippingAddress.postalCode && <p>Postal Code: {shippingAddress.postalCode}</p>}
 												{shippingAddress.country && <p>Country: {shippingAddress.country}</p>}
+											</ListGroup.Item>
+										)}
+										{canCancelOrder() && (
+											<ListGroup.Item className="text-center py-3">
+												<Button
+													variant="danger"
+													disabled={cancelling}
+													onClick={handleCancelOrder}
+												>
+													{cancelling ? 'Cancelling...' : 'Cancel Order'}
+												</Button>
+												<p className="text-muted mt-2 small">
+													* You can only cancel orders within 10 minutes of placing them and before they are paid or shipped.
+												</p>
 											</ListGroup.Item>
 										)}
 									</ListGroup>

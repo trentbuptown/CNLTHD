@@ -37,6 +37,12 @@ interface Order {
     deliveredAt?: string;
     createdAt: string;
     updatedAt: string;
+    paymentInfo?: {
+        paymentId?: string;
+        paymentStatus?: string;
+        paymentAmount?: number;
+        paymentMethod?: string;
+    };
 }
 
 const AdminOrders = () => {
@@ -264,13 +270,20 @@ const AdminOrders = () => {
                                                     </Badge>
                                                 </td>
                                                 <td>
+                                                    {/* Determine payment status badge */}
                                                     {order.isPaid ? (
                                                         <Badge bg="success">Paid</Badge>
+                                                    ) : order.paymentInfo?.paymentStatus === 'success' ? (
+                                                        <Badge bg="success">Paid</Badge>
+                                                    ) : order.paymentInfo?.paymentStatus === 'completed' ? (
+                                                        <Badge bg="success">Paid</Badge>
+                                                    ) : order.status === 'cancelled' ? (
+                                                        <Badge bg="danger">Cancelled</Badge>
                                                     ) : (
                                                         <Badge bg="warning">Pending</Badge>
                                                     )}
                                                     <div>
-                                                        <small>{order.paymentMethod}</small>
+                                                        <small>{order.paymentMethod || order.paymentInfo?.paymentMethod || 'N/A'}</small>
                                                     </div>
                                                 </td>
                                                 <td>

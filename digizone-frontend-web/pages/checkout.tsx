@@ -143,7 +143,10 @@ const Checkout = () => {
 				return sum + (item.price * item.quantity);
 			}, 0);
 
-			// Create order object
+			// Create temporary order ID for payment processing
+			const tempOrderId = `temp_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+
+			// Prepare order data (will be used after successful payment)
 			const orderData = {
 				orderItems: cartItems,
 				userId: user.id || user._id,
@@ -161,46 +164,13 @@ const Checkout = () => {
 				sessionId: session
 			};
 
-			console.log('Submitting order:', orderData);
+			console.log('Order data prepared for submission after payment:', orderData);
 
-			// Create order
-			const orderResult = await Orders.submitOrder(orderData);
-			console.log('Order creation response:', orderResult);
-
-			if (!orderResult.success) {
-				throw new Error(orderResult.message || 'Failed to create order');
-			}
-
-			// Extract order ID from the response with detailed logging
-			// The order controller returns the order in different formats:
-			// 1. { success: true, order: { _id: '...' } }
-			// 2. { success: true, result: { _id: '...' } }
-			// 3. { success: true, result: { order: { _id: '...' } } }
-
-			let orderId = '';
-
-			if (orderResult.order && orderResult.order._id) {
-				console.log('Found order ID in response.order:', orderResult.order._id);
-				orderId = orderResult.order._id;
-			} else if (orderResult.result && orderResult.result._id) {
-				console.log('Found order ID in response.result:', orderResult.result._id);
-				orderId = orderResult.result._id;
-			} else if (orderResult.result && orderResult.result.order && orderResult.result.order._id) {
-				console.log('Found order ID in response.result.order:', orderResult.result.order._id);
-				orderId = orderResult.result.order._id;
-			} else {
-				// Log the full response for debugging
-				console.error('Could not find order ID in response:', JSON.stringify(orderResult));
-				throw new Error('Invalid order ID returned from server');
-			}
-
-			console.log('Using order ID for payment:', orderId);
-
-			// Process payment based on selected method
+			// Handle payment first - only create order if payment is successful
 			if (paymentMethod === 'vnpay') {
-				// Process direct VNPAY payment
+				// Process direct VNPAY payment first
 				try {
-					console.log('Processing direct VNPAY payment for order:', orderId);
+					console.log('Processing VNPAY payment before creating order...');
 
 					// Show processing message
 					addToast('Processing payment...', {
@@ -208,49 +178,30 @@ const Checkout = () => {
 						autoDismiss: true
 					});
 
-					// Call the direct payment API
-					const paymentResponse = await Payments.processDirectVnpayPayment(
-						orderId,
+					// Prepare customer info for the payment
+					const customerInfo = {
+						userId: user.id || user._id,
+						name,
+						email,
+						phone,
+						address,
+						city,
+						postalCode,
+						country
+					};
+
+					// Call the direct payment API with temporary order ID
+					// We'll create the real order only after payment success
+					const paymentResponse = await Payments.processPaymentBeforeOrder(
 						totalPrice,
-						cardDetails
+						cardDetails,
+						customerInfo
 					);
 
-					console.log('Direct VNPAY payment response:', paymentResponse);
+					console.log('VNPAY payment response:', paymentResponse);
 
-					if (paymentResponse.success) {
-						// Check if 3DS authentication was required
-						if (paymentResponse.was3DS) {
-							// Simulate 3DS verification process
-							addToast('3D Secure Authentication required', {
-								appearance: 'info',
-								autoDismiss: true
-							});
-
-							// Show simulated 3DS authentication process
-							await new Promise(resolve => setTimeout(resolve, 1500));
-
-							addToast('3D Secure Authentication successful', {
-								appearance: 'success',
-								autoDismiss: true
-							});
-
-							await new Promise(resolve => setTimeout(resolve, 1000));
-						}
-
-						// Clear the cart after successful order
-						cartDispatch({ type: 'CLEAR_CART', payload: {} });
-
-						addToast('Payment successful! Your order has been placed.', {
-							appearance: 'success',
-							autoDismiss: true
-						});
-
-						// Redirect to success page
-						setTimeout(() => {
-							router.push(`/success?order_id=${orderId}&transaction_id=${paymentResponse.transactionId}`);
-						}, 1500);
-					} else {
-						// Handle specific error cases
+					if (!paymentResponse.success) {
+						// Payment failed - throw error with specific message
 						let errorMessage = 'Payment failed. Please try again.';
 
 						if (paymentResponse.errorCode === 'INSUFFICIENT_FUNDS') {
@@ -266,51 +217,121 @@ const Checkout = () => {
 						throw new Error(paymentResponse.message || errorMessage);
 					}
 
+					// Payment successful - now create the order
+					console.log('Payment successful, creating order...');
+					const orderResult = await Orders.submitOrder(orderData);
+					console.log('Order creation response:', orderResult);
+
+					if (!orderResult.success) {
+						throw new Error(orderResult.message || 'Failed to create order');
+					}
+
+					// Extract order ID from the response
+					let orderId = '';
+					if (orderResult.order && orderResult.order._id) {
+						orderId = orderResult.order._id;
+					} else if (orderResult.result && orderResult.result._id) {
+						orderId = orderResult.result._id;
+					} else if (orderResult.result && orderResult.result.order && orderResult.result.order._id) {
+						orderId = orderResult.result.order._id;
+					} else {
+						throw new Error('Invalid order ID returned from server');
+					}
+
+					console.log('Order created successfully with ID:', orderId);
+
+					// Link payment to the created order
+					try {
+						if (paymentResponse.transactionId) {
+							await Payments.linkPaymentToOrder(paymentResponse.transactionId, orderId, 'completed');
+						} else {
+							console.error('Error: Transaction ID is undefined');
+						}
+					} catch (error) {
+						console.error('Error linking payment to order:', error);
+						// Continue anyway as order is created
+					}
+
+					// Clear the cart after successful order
+					cartDispatch({ type: 'CLEAR_CART', payload: {} });
+
+					addToast('Payment successful! Your order has been placed.', {
+						appearance: 'success',
+						autoDismiss: true
+					});
+
+					// Redirect to success page
+					setTimeout(() => {
+						router.push(`/success?order_id=${orderId}&transaction_id=${paymentResponse.transactionId}`);
+					}, 1500);
+
 					return;
 				} catch (error: any) {
 					console.error('Payment processing error:', error);
 					throw new Error(error.message || 'Failed to process payment');
 				}
 			} else if (paymentMethod === 'cod') {
-				// Create COD payment
-				console.log('Creating COD payment for order:', orderId);
+				// For COD, create the order first since payment happens on delivery
+				console.log('Creating COD order...');
+				const orderResult = await Orders.submitOrder(orderData);
+				console.log('COD order creation response:', orderResult);
+
+				if (!orderResult.success) {
+					throw new Error(orderResult.message || 'Failed to create order');
+				}
+
+				// Extract order ID
+				let orderId = '';
+				if (orderResult.order && orderResult.order._id) {
+					orderId = orderResult.order._id;
+				} else if (orderResult.result && orderResult.result._id) {
+					orderId = orderResult.result._id;
+				} else if (orderResult.result && orderResult.result.order && orderResult.result.order._id) {
+					orderId = orderResult.result.order._id;
+				} else {
+					throw new Error('Invalid order ID returned from server');
+				}
+
+				// Create COD payment record
 				const customerInfo = {
+					userId: user.id || user._id,
 					name,
 					email,
 					phone,
-					address
+					address,
+					city,
+					postalCode,
+					country
 				};
 
-				const paymentResponse = await Payments.createCodPayment(
+				// Create COD payment
+				const codPaymentResult = await Payments.createCodPayment(
 					orderId,
 					totalPrice,
 					customerInfo
 				);
 
-				console.log('COD payment response:', paymentResponse);
-
-				if (paymentResponse.success) {
-					// Clear the cart after successful order
-					cartDispatch({ type: 'CLEAR_CART', payload: {} });
-
-					addToast('Order placed successfully! You will pay upon delivery.', {
-						appearance: 'success',
-						autoDismiss: true
-					});
-
-					// Redirect to confirmation page or homepage
-					console.log('Redirecting to success page with order ID:', orderId);
-					setTimeout(() => {
-						router.push(`/success?order_id=${orderId}`);
-					}, 2000);
-					return;
-				} else {
-					throw new Error(paymentResponse.message || 'Failed to create COD payment');
+				if (!codPaymentResult.success) {
+					console.warn('Warning: COD payment record creation failed, but order was created', codPaymentResult.message);
 				}
+
+				// Clear the cart
+				cartDispatch({ type: 'CLEAR_CART', payload: {} });
+
+				addToast('Order placed successfully! You will pay upon delivery.', {
+					appearance: 'success',
+					autoDismiss: true
+				});
+
+				// Redirect to success page
+				setTimeout(() => {
+					router.push(`/success?order_id=${orderId}`);
+				}, 1500);
 			}
 
 		} catch (error: any) {
-			addToast(error.message, {
+			console.error('Order placement error:', error);
+			addToast(error.message || 'Failed to place order. Please try again.', {
 				appearance: 'error',
 				autoDismiss: true
 			});
@@ -477,120 +498,57 @@ const Checkout = () => {
 								</div>
 
 								{paymentMethod === 'vnpay' && (
-									<div className="mt-4 mb-4 p-3 border rounded">
-										<h5>VNPAY Payment Information</h5>
+									<div className="mt-4 p-3 border rounded">
+										<h4>VNPAY Payment Information</h4>
+										<p>Enter your card details for payment</p>
 
 										<Form.Group className="mb-3" controlId="bankSelection">
 											<Form.Label>Select Bank</Form.Label>
 											<Form.Select
 												onChange={(e) => {
-													// Pre-fill card details based on selected bank
-													const bankOption = e.target.value;
+													const bankValue = e.target.value;
 													let newCardDetails = { ...cardDetails };
 
-													switch (bankOption) {
-														case 'NCB-SUCCESS':
+													// Only prepopulate for sandbox testing examples
+													switch (bankValue) {
+														case 'NCB':
 															newCardDetails = {
-																cardNumber: '9704198526191432198',
-																cardName: 'NGUYEN VAN A',
-																expiryDate: '07/15',
-																cvv: '123'
+																cardNumber: '',
+																cardName: '',
+																expiryDate: '',
+																cvv: ''
 															};
 															break;
-														case 'NCB-INSUFFICIENT':
+														case 'VISA':
 															newCardDetails = {
-																cardNumber: '9704195798459170488',
-																cardName: 'NGUYEN VAN A',
-																expiryDate: '07/15',
-																cvv: '123'
+																cardNumber: '',
+																cardName: '',
+																expiryDate: '',
+																cvv: ''
 															};
 															break;
-														case 'NCB-INACTIVE':
+														case 'MASTERCARD':
 															newCardDetails = {
-																cardNumber: '9704192181368742',
-																cardName: 'NGUYEN VAN A',
-																expiryDate: '07/15',
-																cvv: '123'
+																cardNumber: '',
+																cardName: '',
+																expiryDate: '',
+																cvv: ''
 															};
 															break;
-														case 'NCB-LOCKED':
+														case 'JCB':
 															newCardDetails = {
-																cardNumber: '9704193370791314',
-																cardName: 'NGUYEN VAN A',
-																expiryDate: '07/15',
-																cvv: '123'
-															};
-															break;
-														case 'NCB-EXPIRED':
-															newCardDetails = {
-																cardNumber: '9704194841945513',
-																cardName: 'NGUYEN VAN A',
-																expiryDate: '07/15',
-																cvv: '123'
-															};
-															break;
-														case 'VISA-NO3DS':
-															newCardDetails = {
-																cardNumber: '4456530000001005',
-																cardName: 'NGUYEN VAN A',
-																expiryDate: '12/26',
-																cvv: '123'
-															};
-															break;
-														case 'VISA-3DS':
-															newCardDetails = {
-																cardNumber: '4456530000001096',
-																cardName: 'NGUYEN VAN A',
-																expiryDate: '12/26',
-																cvv: '123'
-															};
-															break;
-														case 'MASTERCARD-NO3DS':
-															newCardDetails = {
-																cardNumber: '5200000000001005',
-																cardName: 'NGUYEN VAN A',
-																expiryDate: '12/26',
-																cvv: '123'
-															};
-															break;
-														case 'MASTERCARD-3DS':
-															newCardDetails = {
-																cardNumber: '5200000000001096',
-																cardName: 'NGUYEN VAN A',
-																expiryDate: '12/26',
-																cvv: '123'
-															};
-															break;
-														case 'JCB-NO3DS':
-															newCardDetails = {
-																cardNumber: '3337000000000008',
-																cardName: 'NGUYEN VAN A',
-																expiryDate: '12/26',
-																cvv: '123'
-															};
-															break;
-														case 'JCB-3DS':
-															newCardDetails = {
-																cardNumber: '3337000000200004',
-																cardName: 'NGUYEN VAN A',
-																expiryDate: '12/24',
-																cvv: '123'
+																cardNumber: '',
+																cardName: '',
+																expiryDate: '',
+																cvv: ''
 															};
 															break;
 														case 'ATM-NAPAS':
 															newCardDetails = {
-																cardNumber: '9704000000000018',
-																cardName: 'NGUYEN VAN A',
-																expiryDate: '03/07',
-																cvv: '123'
-															};
-															break;
-														case 'ATM-EXIMBANK':
-															newCardDetails = {
-																cardNumber: '9704310005819191',
-																cardName: 'NGUYEN VAN A',
-																expiryDate: '10/26',
-																cvv: '123'
+																cardNumber: '',
+																cardName: '',
+																expiryDate: '',
+																cvv: ''
 															};
 															break;
 														default:
@@ -608,23 +566,13 @@ const Checkout = () => {
 											>
 												<option value="">Select bank or card type...</option>
 												<optgroup label="Local Banks">
-													<option value="NCB-SUCCESS">NCB Bank (Successful payment)</option>
-													<option value="NCB-INSUFFICIENT">NCB Bank (Insufficient funds)</option>
-													<option value="NCB-INACTIVE">NCB Bank (Card not activated)</option>
-													<option value="NCB-LOCKED">NCB Bank (Card locked)</option>
-													<option value="NCB-EXPIRED">NCB Bank (Card expired)</option>
-													<option value="ATM-EXIMBANK">EXIMBANK ATM Card</option>
+													<option value="NCB">NCB Bank</option>
+													<option value="ATM-NAPAS">NAPAS ATM Card</option>
 												</optgroup>
 												<optgroup label="International Cards">
-													<option value="VISA-NO3DS">VISA (No 3DS)</option>
-													<option value="VISA-3DS">VISA (3DS)</option>
-													<option value="MASTERCARD-NO3DS">MasterCard (No 3DS)</option>
-													<option value="MASTERCARD-3DS">MasterCard (3DS)</option>
-													<option value="JCB-NO3DS">JCB (No 3DS)</option>
-													<option value="JCB-3DS">JCB (3DS)</option>
-												</optgroup>
-												<optgroup label="Other Payment Methods">
-													<option value="ATM-NAPAS">NAPAS ATM Card</option>
+													<option value="VISA">VISA</option>
+													<option value="MASTERCARD">MasterCard</option>
+													<option value="JCB">JCB</option>
 												</optgroup>
 											</Form.Select>
 										</Form.Group>
@@ -682,13 +630,13 @@ const Checkout = () => {
 										</Row>
 										<Alert variant="info" className="mt-2">
 											<small>
-												<strong>Note:</strong> This is a simulated VNPAY checkout for demo purposes. We've added test cards for different scenarios.
+												<strong>Note:</strong> This is a simulated VNPAY checkout for demo purposes.
 												<br />
-												- For successful payments, use the NCB Bank (Successful payment) option.
+												For NCB Bank test cards, try: 9704195798459170 (success), 9704195798459170488 (insufficient funds)
 												<br />
-												- You can also test error scenarios with the other NCB options.
+												For VISA test cards, try: 4456530000001096 (3DS), 4456530000001005 (No 3DS)
 												<br />
-												- No actual payments will be processed.
+												For all cards, you can use any valid expiry date format (MM/YY) and CVV.
 											</small>
 										</Alert>
 									</div>

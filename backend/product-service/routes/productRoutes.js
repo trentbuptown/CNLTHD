@@ -9,12 +9,18 @@ router.get('/', productController.getProducts);
 // Public routes
 router.get('/products', productController.getProducts);
 router.get('/products/category/:category', productController.getProductsByCategory);
-router.get('/products/:id', productController.getProductById);
+
+// Health check endpoint - placed before ID routes to avoid conflict
+router.get('/health', (req, res) => {
+    res.status(200).json({ status: 'ok', service: 'product-service' });
+});
 
 // Statistics endpoints
 router.get('/count', productController.getProductCount);
 router.get('/products/count', productController.getProductCount);
 
+// Product by ID routes - must come after specific routes
+router.get('/products/:id', productController.getProductById);
 // Add a root route to get product by ID - critical for API gateway forwarding
 router.get('/:id', productController.getProductById);
 
@@ -31,11 +37,6 @@ router.get('/:id/reviews', reviewController.getProductReviews);
 router.get('/:productId/reviews/:id', reviewController.getReviewById);
 router.put('/:productId/reviews/:id', reviewController.updateReview);
 router.delete('/:productId/reviews/:id', reviewController.deleteReview);
-
-// Health check endpoint
-router.get('/health', (req, res) => {
-    res.status(200).json({ status: 'ok', service: 'product-service' });
-});
 
 // Admin routes (these would typically be protected)
 router.post('/products', productController.createProduct);

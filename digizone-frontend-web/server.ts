@@ -18,14 +18,12 @@ app
 		// apply proxy in dev mode
 		console.log('DEV ;;;; ', dev);
 		if (dev) {
-			server.use('/api', () =>
-				createProxyMiddleware({
-					target: dev
-						? process.env.NEXT_PUBLIC_BASE_API_URL_LOCAL
-						: process.env.NEXT_PUBLIC_BASE_API_URL,
-					changeOrigin: true,
-				})
-			);
+			server.use('/api', createProxyMiddleware({
+				target: dev
+					? process.env.NEXT_PUBLIC_BASE_API_URL_LOCAL
+					: process.env.NEXT_PUBLIC_BASE_API_URL,
+				changeOrigin: true,
+			}));
 		}
 
 		server.all('*', (req, res) => {

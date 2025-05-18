@@ -152,17 +152,26 @@ exports.getOrderById = async (req, res) => {
 // @access  Private
 exports.updateOrderToPaid = async (req, res) => {
     try {
+        console.log(`Updating order ${req.params.id} to paid with payment data:`, JSON.stringify(req.body));
         const order = await Order.findById(req.params.id);
 
         if (!order) {
+            console.error(`Order not found: ${req.params.id}`);
             return res.status(404).json({
                 success: false,
                 message: 'Order not found'
             });
         }
 
+        // Mark order as paid
         order.isPaid = true;
         order.paidAt = Date.now();
+
+        // Update order status to reflect payment
+        if (order.status === 'pending') {
+            order.status = 'processing';
+            console.log(`Updated order ${order._id} status from pending to processing`);
+        }
 
         // Store comprehensive payment information
         order.paymentResult = {
@@ -182,6 +191,7 @@ exports.updateOrderToPaid = async (req, res) => {
         };
 
         const updatedOrder = await order.save();
+        console.log(`Order ${order._id} successfully marked as paid with payment ID ${req.body.id}`);
 
         // Also store in payment service if there's additional data
         try {
@@ -491,15 +501,17 @@ exports.deleteOrder = async (req, res) => {
 // @access  Private/Admin
 exports.getOrderStats = async (req, res) => {
     try {
-        // Get total count of orders
+        // Get total count of all orders without filtering
         const count = await Order.countDocuments();
 
-        // Calculate total revenue from all orders
+        // Calculate total revenue from all orders without filtering
         const revenueResult = await Order.aggregate([
             { $group: { _id: null, totalRevenue: { $sum: "$totalPrice" } } }
         ]);
 
         const revenue = revenueResult.length > 0 ? revenueResult[0].totalRevenue : 0;
+
+        console.log(`Stats calculated: ${count} orders, ${revenue} revenue`);
 
         res.status(200).json({
             success: true,
@@ -508,6 +520,109 @@ exports.getOrderStats = async (req, res) => {
         });
     } catch (error) {
         console.error('Error getting order statistics:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// @desc    Cancel an order (only allowed within 10 minutes of creation)
+// @route   PUT /orders/:id/cancel
+// @access  Private
+exports.cancelOrder = async (req, res) => {
+    try {
+        const order = await Order.findById(req.params.id);
+
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                message: 'Order not found'
+            });
+        }
+
+        // Check if the order is already delivered or cancelled
+        if (order.isDelivered) {
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot cancel order that has been delivered'
+            });
+        }
+
+        if (order.status === 'cancelled') {
+            return res.status(400).json({
+                success: false,
+                message: 'Order is already cancelled'
+            });
+        }
+
+        // Check if more than 10 minutes have passed since order creation
+        const orderCreationTime = new Date(order.createdAt).getTime();
+        const currentTime = new Date().getTime();
+        const timeDifferenceInMinutes = (currentTime - orderCreationTime) / (1000 * 60);
+
+        if (timeDifferenceInMinutes > 10) {
+            return res.status(400).json({
+                success: false,
+                message: 'Orders can only be cancelled within 10 minutes of placement'
+            });
+        }
+
+        // If order has already been paid, prevent cancellation or handle refund logic
+        if (order.isPaid) {
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot cancel paid orders. Please contact customer support.'
+            });
+        }
+
+        // Restore product stock for cancelled order
+        if (order.orderItems && order.orderItems.length > 0) {
+            try {
+                console.log(`Restoring stock for cancelled order ${order._id}`);
+
+                for (const item of order.orderItems) {
+                    const response = await axios.put(
+                        `${process.env.PRODUCT_SERVICE_URL || 'http://product-service:3002'}/products/${item.productId}/stock`,
+                        {
+                            quantity: item.quantity // Positive value to increase stock back
+                        }
+                    );
+
+                    if (!response.data.success) {
+                        console.error(`Failed to restore stock for product ${item.productId}: ${response.data.message}`);
+                    } else {
+                        console.log(`Successfully restored ${item.quantity} units to product ${item.productId}`);
+                    }
+                }
+            } catch (error) {
+                console.error('Error restoring product stock:', error);
+                // Continue with order cancellation even if stock restoration fails
+            }
+        }
+
+        // Update order status to cancelled
+        order.status = 'cancelled';
+
+        // Save the updated order
+        const updatedOrder = await order.save();
+
+        // Delete related payment if it exists and isn't already processed
+        try {
+            const paymentServiceUrl = process.env.PAYMENT_SERVICE_URL || 'http://payment-service:3004';
+            await axios.delete(`${paymentServiceUrl}/payments/order/${order._id}`);
+        } catch (error) {
+            console.error('Error deleting payment records:', error.message);
+            // Continue with order cancellation even if payment deletion fails
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Order cancelled successfully',
+            order: updatedOrder
+        });
+    } catch (error) {
+        console.error('Error cancelling order:', error);
         res.status(500).json({
             success: false,
             message: error.message

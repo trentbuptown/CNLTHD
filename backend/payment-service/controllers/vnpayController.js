@@ -335,14 +335,18 @@ exports.createCodPayment = async (req, res) => {
  */
 exports.processDirectPayment = async (req, res) => {
     try {
-        const { orderId, amount, cardDetails, customerInfo = {} } = req.body;
+        const { orderId, tempId, amount, cardDetails, customerInfo = {} } = req.body;
 
-        if (!orderId || !amount || !cardDetails) {
+        if (!amount || !cardDetails) {
             return res.status(400).json({
                 success: false,
                 message: 'Missing required payment information'
             });
         }
+
+        // If we're processing a payment before creating an order,
+        // we'll use a temporary ID and save the payment record without an orderId
+        const isPreOrderPayment = tempId === true;
 
         // Handle different test card scenarios based on the card number
         const cardNumber = cardDetails.cardNumber?.replace(/\s/g, '');
@@ -353,7 +357,7 @@ exports.processDirectPayment = async (req, res) => {
                 // Create failed payment record
                 const Payment = require('../models/Payment');
                 const payment = new Payment({
-                    orderId,
+                    orderId: isPreOrderPayment ? null : orderId, // No order ID for pre-order payments
                     userId: customerInfo.userId,
                     amount,
                     currency: 'VND',
@@ -422,7 +426,7 @@ exports.processDirectPayment = async (req, res) => {
                 // Create failed payment record
                 const Payment = require('../models/Payment');
                 const payment = new Payment({
-                    orderId,
+                    orderId: isPreOrderPayment ? null : orderId, // No order ID for pre-order payments
                     userId: customerInfo.userId,
                     amount,
                     currency: 'VND',
@@ -476,16 +480,20 @@ exports.processDirectPayment = async (req, res) => {
         try {
             const Payment = require('../models/Payment');
             paymentRecord = new Payment({
-                orderId,
+                orderId: isPreOrderPayment ? null : orderId, // No order ID for pre-order payments
                 userId: customerInfo.userId,
                 amount,
                 currency: 'VND',
                 method: 'vnpay',
+                // Always set status to 'completed' for successful payments, even for pre-order payments
+                // This ensures payment is recognized as successful immediately
                 status: 'completed',
                 transactionId,
                 gatewayReference: transactionId,
                 paymentResponseCode: '00',
-                paymentResponseMessage: 'Payment successful',
+                paymentResponseMessage: isPreOrderPayment ?
+                    'Payment successful, waiting for order creation' :
+                    'Payment successful',
                 customerInfo: {
                     name: customerInfo.name,
                     email: customerInfo.email,
@@ -514,33 +522,38 @@ exports.processDirectPayment = async (req, res) => {
                     authCode: Math.floor(100000 + Math.random() * 900000).toString(),
                     is3DS: cardNumber === '4456530000001096' ||
                         cardNumber === '5200000000001096' ||
-                        cardNumber === '3337000000200004'
+                        cardNumber === '3337000000200004',
+                    isPreOrderPayment: isPreOrderPayment, // Add this flag for better tracking
+                    preOrderTime: isPreOrderPayment ? new Date().toISOString() : null
                 }
             });
 
             await paymentRecord.save();
-            console.log(`Direct payment record created for order ${orderId}: ${paymentRecord._id}`);
+            console.log(`Direct payment record created with status '${paymentRecord.status}'${isPreOrderPayment ? ' (pre-order)' : ` for order ${orderId}`}: ${paymentRecord._id}`);
+            console.log(`Payment Transaction ID: ${transactionId}`); // Log transaction ID for tracking
         } catch (dbError) {
             console.error('Error saving payment record:', dbError);
             // Continue with payment process even if DB operations fail
         }
 
-        // Update order payment status
-        try {
-            console.log('Updating order status for order:', orderId);
-            await axios.put(`${process.env.ORDER_SERVICE_URL || 'http://order-service:3003'}/orders/${orderId}/pay`, {
-                id: transactionId,
-                status: 'completed',
-                updateTime: new Date().toISOString(),
-                paymentMethod: 'vnpay',
-                cardType: 'Credit Card',
-                cardLast4: cardNumber ? cardNumber.slice(-4) : undefined,
-                cardBrand: cardDetails.brand || (cardNumber && cardNumber.startsWith('97') ? 'NCB' : 'Unknown'),
-                gatewayReference: transactionId
-            });
-        } catch (error) {
-            console.error('Error updating order payment status:', error.message);
-            // Continue anyway as payment was successful
+        // Only update order if this is not a pre-order payment
+        if (!isPreOrderPayment) {
+            try {
+                console.log('Updating order status for order:', orderId);
+                await axios.put(`${process.env.ORDER_SERVICE_URL || 'http://order-service:3003'}/orders/${orderId}/pay`, {
+                    id: transactionId,
+                    status: 'completed',
+                    updateTime: new Date().toISOString(),
+                    paymentMethod: 'vnpay',
+                    cardType: 'Credit Card',
+                    cardLast4: cardNumber ? cardNumber.slice(-4) : undefined,
+                    cardBrand: cardDetails.brand || (cardNumber && cardNumber.startsWith('97') ? 'NCB' : 'Unknown'),
+                    gatewayReference: transactionId
+                });
+            } catch (error) {
+                console.error('Error updating order payment status:', error.message);
+                // Continue anyway as payment was successful
+            }
         }
 
         // Successful response
@@ -549,7 +562,10 @@ exports.processDirectPayment = async (req, res) => {
             message: 'Payment processed successfully',
             transactionId,
             paymentId: paymentRecord?._id,
-            orderId
+            orderId: orderId || null,
+            was3DS: cardNumber === '4456530000001096' ||
+                cardNumber === '5200000000001096' ||
+                cardNumber === '3337000000200004'
         });
     } catch (error) {
         console.error('Error processing direct payment:', error);

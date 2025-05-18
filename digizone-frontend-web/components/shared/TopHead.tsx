@@ -85,6 +85,7 @@ const TopHead = () => {
 				<Navbar.Collapse id='responsive-navbar-nav'>
 					<Nav className='me-auto'>
 						<Nav.Link onClick={() => router.push('/')}>Home</Nav.Link>
+						<Nav.Link onClick={() => router.push('/products')}>Shop</Nav.Link>
 					</Nav>
 					<Nav>
 						<Nav.Link

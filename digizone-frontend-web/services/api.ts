@@ -10,6 +10,7 @@ export interface resposnePayload {
 	orders?: any[];
 	order?: any; // Add order property for single order responses
 	product?: any; // Add product property for product responses
+	user?: any; // Add user property for user profile responses
 }
 
 // get base url fro API calls

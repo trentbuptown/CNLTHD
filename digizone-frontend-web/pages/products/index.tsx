@@ -107,7 +107,7 @@ const AllProducts: NextPage<Props> = ({ products, metadata }) => {
 					<ProductFilter />
 				</Col>
 				<Col sm={10}>
-					<Row xs={1} md={3} className='g-3'>
+					<Row xs={1} md={4} className='g-3'>
 						{products && products.length > 0 ? (
 							products.map((product: Record<string, any>) => (
 								<ProductItem

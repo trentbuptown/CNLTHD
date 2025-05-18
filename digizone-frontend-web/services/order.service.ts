@@ -65,5 +65,16 @@ export const Orders = {
 			console.error('Error deleting order:', error);
 			throw error;
 		}
+	},
+
+	// cancel order (user can cancel within 10 minutes of order creation)
+	cancelOrder: async (orderId: string): Promise<resposnePayload> => {
+		try {
+			const cancelOrderRes = await requests.put(`/api/orders/${orderId}/cancel`, {});
+			return cancelOrderRes;
+		} catch (error) {
+			console.error('Error cancelling order:', error);
+			throw error;
+		}
 	}
 };

@@ -31,6 +31,14 @@ interface Order {
     paidAt?: string;
     paymentMethod?: string;
     createdAt?: string;
+    paymentInfo?: {
+        paymentId?: string;
+        paymentStatus?: string;
+        paymentAmount?: number;
+        paymentMethod?: string;
+        createdAt?: string;
+    };
+    paymentResult?: { id?: string; status?: string; updateTime?: string; emailAddress?: string; gatewayReference?: string; last4?: string; cardBrand?: string; };
 }
 
 // Define UserInfo interface
@@ -331,22 +339,7 @@ const AdminOrderDetail = () => {
                                                     <span>{order.paymentMethod || 'Not specified'}</span>
                                                 </div>
                                             </ListGroup.Item>
-                                            <ListGroup.Item>
-                                                <div className="d-flex justify-content-between">
-                                                    <span>Payment Status:</span>
-                                                    <Badge bg={order.isPaid ? 'success' : 'warning'}>
-                                                        {order.isPaid ? 'PAID' : 'PENDING'}
-                                                    </Badge>
-                                                </div>
-                                            </ListGroup.Item>
-                                            {order.isPaid && order.paidAt && (
-                                                <ListGroup.Item>
-                                                    <div className="d-flex justify-content-between">
-                                                        <span>Paid On:</span>
-                                                        <span>{formatDate(order.paidAt)}</span>
-                                                    </div>
-                                                </ListGroup.Item>
-                                            )}
+                                            <ListGroup.Item>                                                <div className="d-flex justify-content-between">                                                    <span>Payment Status:</span>                                                    <Badge bg={order.isPaid || (order.paymentInfo && order.paymentInfo.paymentStatus === 'success') || (order.paymentResult && (order.paymentResult.status === 'completed' || order.paymentResult.status === 'success')) ? 'success' : order.status === 'cancelled' ? 'danger' : 'warning'}>                                                        {order.isPaid || (order.paymentInfo && order.paymentInfo.paymentStatus === 'success') || (order.paymentResult && (order.paymentResult.status === 'completed' || order.paymentResult.status === 'success')) ? 'PAID' : order.status === 'cancelled' ? 'CANCELLED' : 'PENDING'}                                                    </Badge>                                                </div>                                            </ListGroup.Item>                                            {/* Payment ID from either source */}                                            {(order.paymentInfo?.paymentId || order.paymentResult?.id) && (<ListGroup.Item>                                                    <div className="d-flex justify-content-between">                                                        <span>Payment ID:</span>                                                        <span>{order.paymentResult?.id || order.paymentInfo?.paymentId}</span>                                                    </div>                                                </ListGroup.Item>)}                                            {/* Transaction Reference */}                                            {order.paymentResult?.gatewayReference && (<ListGroup.Item>                                                    <div className="d-flex justify-content-between">                                                        <span>Transaction Reference:</span>                                                        <span>{order.paymentResult.gatewayReference}</span>                                                    </div>                                                </ListGroup.Item>)}                                            {/* Payment card info if available */}                                            {(order.paymentResult?.last4 || order.paymentResult?.cardBrand) && (<ListGroup.Item>                                                    <div className="d-flex justify-content-between">                                                        <span>Card Details:</span>                                                        <span>                                                            {order.paymentResult.cardBrand && `${order.paymentResult.cardBrand} `}                                                            {order.paymentResult.last4 && `****${order.paymentResult.last4}`}                                                        </span>                                                    </div>                                                </ListGroup.Item>)}                                            {/* Show payment date */}                                            {(order.isPaid && order.paidAt) || (order.paymentInfo && order.paymentInfo.createdAt) || (order.paymentResult && order.paymentResult.updateTime) ? (<ListGroup.Item>                                                    <div className="d-flex justify-content-between">                                                        <span>Paid On:</span>                                                        <span>{formatDate(order.paidAt || order.paymentResult?.updateTime || order.paymentInfo?.createdAt)}</span>                                                    </div>                                                </ListGroup.Item>) : null}
                                             <ListGroup.Item>
                                                 <div className="d-flex justify-content-between">
                                                     <span>Total Amount:</span>

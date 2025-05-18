@@ -52,17 +52,16 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, title = 'Admin Dash
 
             if (!isAdmin) {
                 console.log('Admin check failed: User is not an admin. Role =', effectiveUser.role);
-                console.log('Redirecting to debug page instead of auth for troubleshooting');
-                router.push('/admin/debug');
+                console.log('Redirecting to auth page - unauthorized access');
+                router.push('/auth');
                 return;
             }
 
             console.log('Admin check passed - User has admin access');
         } catch (error) {
-            // Prevent errors from causing automatic logout
+            // If any error occurs during admin check, redirect to auth
             console.error('Error in Admin layout auth check:', error);
-            // Do not redirect to auth page on error, but to debug page
-            router.push('/admin/debug');
+            router.push('/auth');
         }
     }, [user, router]);
 
@@ -81,7 +80,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, title = 'Admin Dash
     );
 
     if (!isAuthorized && !router.pathname.includes('/auth')) {
-        // Show minimal loading state instead of redirecting immediately
+        // Show minimal loading state
         return (
             <Container fluid className="p-5 text-center">
                 <div className="spinner-border text-primary mb-3" role="status">
@@ -89,12 +88,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, title = 'Admin Dash
                 </div>
                 <p>Verifying admin access...</p>
                 <div className="mt-3">
-                    <p className="text-muted">Having trouble accessing admin? Try our debug page:</p>
+                    <p className="text-muted">If you're experiencing issues, please contact the administrator.</p>
                     <Button
                         variant="outline-primary"
-                        onClick={() => window.location.href = '/admin/debug'}
+                        onClick={() => router.push('/auth')}
                     >
-                        Admin Debug Page
+                        Back to Login
                     </Button>
                 </div>
             </Container>

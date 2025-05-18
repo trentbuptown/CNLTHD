@@ -413,4 +413,99 @@ exports.deletePaymentsByOrderId = async (req, res) => {
             message: error.message
         });
     }
+};
+
+// @desc    Link a payment to an order
+// @route   POST /payments/link
+// @access  Private
+exports.linkPaymentToOrder = async (req, res) => {
+    try {
+        const { transactionId, orderId, paymentStatus } = req.body;
+
+        if (!transactionId || !orderId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Transaction ID and Order ID are required'
+            });
+        }
+
+        console.log(`Linking payment with transaction ID ${transactionId} to order ${orderId}`);
+
+        // Find the payment by transactionId
+        const payment = await Payment.findOne({ transactionId });
+
+        if (!payment) {
+            console.error(`Payment with transaction ID ${transactionId} not found`);
+            return res.status(404).json({
+                success: false,
+                message: 'Payment not found'
+            });
+        }
+
+        // Record the previous status for logging
+        const previousStatus = payment.status;
+
+        // Update payment with the new orderId
+        payment.orderId = orderId;
+
+        // For VNPAY payments, always set the status to completed when linking to an order
+        // This is the critical fix for the "pending" status issue
+        if (payment.method === 'vnpay') {
+            payment.status = 'completed';
+            console.log(`Updated payment status for VNPAY payment ${payment._id} from ${previousStatus} to completed`);
+        }
+        // Also update if status is explicitly provided
+        else if (paymentStatus && ['completed', 'failed', 'pending', 'refunded'].includes(paymentStatus)) {
+            payment.status = paymentStatus;
+            console.log(`Updated payment status for payment ${payment._id} from ${previousStatus} to ${paymentStatus}`);
+        }
+
+        // Save the updated payment
+        await payment.save();
+        console.log(`Payment ${payment._id} successfully linked to order ${orderId} with status ${payment.status}`);
+
+        // Update the order to mark it as paid if payment is completed
+        if (payment.status === 'completed') {
+            try {
+                console.log(`Notifying order service about successful payment for order ${orderId}`);
+                // Notify order service about successful payment
+                const orderServiceResponse = await axios.put(`${process.env.ORDER_SERVICE_URL || 'http://order-service:3003'}/orders/${orderId}/pay`, {
+                    id: payment.transactionId,
+                    status: payment.status,
+                    updateTime: new Date().toISOString(),
+                    paymentMethod: payment.method,
+                    gatewayReference: payment.gatewayReference,
+                    cardLast4: payment.cardDetails?.last4,
+                    cardBrand: payment.cardDetails?.brand
+                }).catch(err => {
+                    console.error('Order payment update error:', err.message);
+                    return null;
+                });
+
+                if (orderServiceResponse && orderServiceResponse.data.success) {
+                    console.log(`Order ${orderId} successfully marked as paid`);
+                }
+            } catch (error) {
+                console.error('Error updating order payment status:', error.message);
+                // Continue anyway as payment was linked successfully
+            }
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'Payment linked to order successfully',
+            payment: {
+                _id: payment._id,
+                transactionId: payment.transactionId,
+                orderId: payment.orderId,
+                status: payment.status
+            }
+        });
+    } catch (error) {
+        console.error('Error linking payment to order:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
 }; 

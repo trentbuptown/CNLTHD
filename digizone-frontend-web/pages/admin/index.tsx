@@ -60,13 +60,32 @@ const AdminDashboard = () => {
             let orderCount = 0;
             let revenue = 0;
             try {
-                const orderResponse = await axios.get(`${baseUrl}/api/orders/stats`, { headers: headers as any });
+                // Try to fetch directly from order service as a workaround
+                console.log('Fetching order stats directly from order service...');
+                const orderResponse = await axios.get('http://localhost:3003/orders', {
+                    headers: headers as any
+                });
+                console.log('Order service response:', orderResponse.data);
+
                 if (orderResponse.data && orderResponse.data.success) {
+                    // Calculate stats from all orders
                     orderCount = orderResponse.data.count || 0;
-                    revenue = orderResponse.data.revenue || 0;
+
+                    // Calculate revenue manually from orders
+                    revenue = orderResponse.data.orders.reduce((total: number, order: any) => {
+                        // Only count non-cancelled orders
+                        if (order.status !== 'cancelled') {
+                            return total + order.totalPrice;
+                        }
+                        return total;
+                    }, 0);
+
+                    console.log('Stats calculated from orders:', { orderCount, revenue });
+                } else {
+                    console.error('Order service API returned success=false:', orderResponse.data);
                 }
             } catch (error) {
-                console.error('Failed to fetch order stats', error);
+                console.error('Failed to fetch orders', error);
                 // Use 0 as default values if API fails
                 orderCount = 0;
                 revenue = 0;

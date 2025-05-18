@@ -24,6 +24,7 @@ export interface PaymentResponse {
     transactionId?: string;
     was3DS?: boolean;     // Indicates if 3D Secure authentication was used
     errorCode?: string;   // Error code for failed payments
+    wasTemp?: boolean;    // Indicates if this was a temporary payment before order creation
 }
 
 export interface CardDetails {
@@ -75,6 +76,66 @@ export const Payments = {
             return {
                 success: false,
                 message: 'Failed to create VNPAY payment'
+            };
+        }
+    },
+
+    // Process payment before creating an order (prevents creating orders for failed payments)
+    processPaymentBeforeOrder: async (
+        amount: number,
+        cardDetails: CardDetails,
+        customerInfo: any
+    ): Promise<PaymentResponse> => {
+        try {
+            // Generate a temporary ID for the payment that will be replaced later
+            const tempId = `temp_${Date.now()}`;
+
+            const response = await requests.post('/api/payments/vnpay/direct', {
+                tempId: true, // Flag to indicate this is a pre-order payment
+                amount,
+                cardDetails,
+                customerInfo
+            });
+
+            return {
+                success: response.success,
+                message: response.message,
+                transactionId: response.transactionId,
+                wasTemp: true,
+                was3DS: response.was3DS,
+                errorCode: response.errorCode
+            };
+        } catch (error) {
+            console.error('Error processing payment:', error);
+            return {
+                success: false,
+                message: 'Failed to process payment'
+            };
+        }
+    },
+
+    // Link a previously created payment to an order
+    linkPaymentToOrder: async (
+        transactionId: string,
+        orderId: string,
+        paymentStatus?: string
+    ): Promise<PaymentResponse> => {
+        try {
+            const response = await requests.post('/api/payments/link', {
+                transactionId,
+                orderId,
+                paymentStatus // Add payment status to ensure it's properly set
+            });
+
+            return {
+                success: response.success,
+                message: response.message
+            };
+        } catch (error) {
+            console.error('Error linking payment to order:', error);
+            return {
+                success: false,
+                message: 'Failed to link payment to order'
             };
         }
     },

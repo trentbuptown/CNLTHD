@@ -24,6 +24,7 @@ import ProductItem from '../../components/Products/ProductItem';
 import { Context } from '../../context';
 import ReviewSection from '../../components/Product/ReviewSection';
 import { CURRENCY_SYMBOL, DEFAULT_IMAGE_URL } from '../../helper/settings';
+import { useRouter } from 'next/router';
 
 interface ProductProps {
 	product: Record<string, any>;
@@ -31,6 +32,7 @@ interface ProductProps {
 }
 
 const Product: NextPage<ProductProps> = ({ product, relatedProducts }) => {
+	const router = useRouter();
 	const [show, setShow] = useState(false);
 	const [allSkuDetails, setAllSkuDetails] = React.useState(
 		product?.skuDetails || []
@@ -58,7 +60,37 @@ const Product: NextPage<ProductProps> = ({ product, relatedProducts }) => {
 		cartDispatch,
 		state: { user },
 	} = useContext(Context);
-	// const handleShow = () => setShow(true);
+
+	// Reset product state when the product ID changes (when navigating between products)
+	useEffect(() => {
+		// This will run whenever the product data or router query changes
+		if (product?._id) {
+			console.log("Product changed to:", product?._id);
+
+			// Reset quantity to 1
+			setQuantity(1);
+
+			// Reset the display SKU to the first SKU for the new product
+			if (product?.skuDetails && Array.isArray(product.skuDetails) && product.skuDetails.length > 0) {
+				const newDisplaySku = product.skuDetails.sort(
+					(a: { price: number }, b: { price: number }) => a.price - b.price
+				)[0] || {};
+				setDisplaySku(newDisplaySku);
+			} else {
+				setDisplaySku({
+					_id: product?._id ? `${product._id}_default` : 'default',
+					price: product?.price || 0,
+					validity: 365,
+					lifetime: false
+				});
+			}
+
+			// Update SKU details
+			setAllSkuDetails(product?.skuDetails || []);
+		}
+	}, [product?._id]);
+
+	// Handle cart action
 	const handleCart = () => {
 		cartDispatch({
 			type: cartItems.find(
@@ -84,6 +116,11 @@ const Product: NextPage<ProductProps> = ({ product, relatedProducts }) => {
 	// Get product name with fallback
 	const getProductName = () => {
 		return product?.productName || product?.name || 'Product Details';
+	};
+
+	// Check if the current product's SKU is in the cart
+	const isInCart = () => {
+		return cartItems && Array.isArray(cartItems) && cartItems.find((item: any) => item.skuId === displaySku._id);
 	};
 
 	const getProductImage = (product: Record<string, any> | undefined) => {
@@ -180,7 +217,7 @@ const Product: NextPage<ProductProps> = ({ product, relatedProducts }) => {
 							disabled={!displaySku?.price || displaySku.price <= 0}
 						>
 							<BagCheckFill className='cartIcon' />
-							{cartItems && Array.isArray(cartItems) && cartItems.find((item: any) => item.skuId === displaySku._id)
+							{isInCart()
 								? 'Update cart'
 								: 'Add to cart'} - {CURRENCY_SYMBOL}{displaySku?.price || '0'}
 						</Button>

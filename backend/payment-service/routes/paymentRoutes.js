@@ -11,6 +11,7 @@ router.get('/payments/user/:userId', paymentController.getUserPayments);
 router.get('/payments/:id', paymentController.getPaymentById);
 router.post('/payments/sync', paymentController.syncPayment);
 router.delete('/payments/order/:orderId', paymentController.deletePaymentsByOrderId);
+router.post('/payments/link', paymentController.linkPaymentToOrder);
 
 // VNPAY payment routes
 router.post('/payments/vnpay/create', vnpayController.createPaymentUrl);
@@ -25,5 +26,6 @@ router.post('/vnpay/create', vnpayController.createPaymentUrl);
 router.get('/vnpay/return', vnpayController.vnpayReturn);
 router.post('/vnpay/direct', vnpayController.processDirectPayment);
 router.post('/cod/create', vnpayController.createCodPayment);
+router.post('/payments/link', paymentController.linkPaymentToOrder);
 
 module.exports = router; 

@@ -135,6 +135,35 @@ export const Users = {
 
 		return updateUserRes;
 	},
+	// update user profile (name, phone, password)
+	updateUserProfile: async (userData: any): Promise<resposnePayload> => {
+		try {
+			const response = await requests.put('/api/users/profile', userData);
+
+			// Update the local storage with new user data
+			if (response.success) {
+				// Get current stored user data
+				const storedUser = JSON.parse(
+					window.localStorage.getItem('_digi_user') || '{}'
+				);
+
+				// Update with new values
+				const updatedUser = {
+					...storedUser,
+					name: response.user?.name || userData.name || storedUser.name,
+					phone: response.user?.phone || userData.phone || storedUser.phone
+				};
+
+				// Save updated user to local storage
+				window.localStorage.setItem('_digi_user', JSON.stringify(updatedUser));
+			}
+
+			return response;
+		} catch (error) {
+			console.error('Error updating user profile:', error);
+			throw error;
+		}
+	},
 	// forgot user's password
 	forgotUserPassword: async (email: string): Promise<resposnePayload> => {
 		const forgotUserPasswordRes = await requests.get(

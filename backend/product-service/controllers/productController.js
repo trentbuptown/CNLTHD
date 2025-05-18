@@ -29,7 +29,7 @@ exports.createProduct = async (req, res) => {
 // @access  Public
 exports.getProducts = async (req, res) => {
     try {
-        const { category, platformType, limit = 10, page = 1, sort, search } = req.query;
+        const { category, platformType, limit = 12, page = 1, sort, search } = req.query;
 
         console.log('Request query parameters:', req.query);
 
