@@ -28,6 +28,9 @@ const orderSchema = new mongoose.Schema({
     },
     orderItems: [orderItemSchema],
     shippingAddress: {
+        name: { type: String, required: true },
+        email: { type: String, required: true },
+        phone: { type: String, required: true },
         address: { type: String, required: true },
         city: { type: String, required: true },
         postalCode: { type: String, required: true },
@@ -36,7 +39,7 @@ const orderSchema = new mongoose.Schema({
     paymentMethod: {
         type: String,
         required: true,
-        enum: ['PayPal', 'Credit Card', 'Debit Card', 'Cash on Delivery']
+        enum: ['PayPal', 'Credit Card', 'Debit Card', 'Cash on Delivery', 'Bank Transfer', 'vnpay', 'cod']
     },
     paymentResult: {
         id: { type: String },

@@ -45,12 +45,30 @@ const productSchema = new mongoose.Schema({
         type: String,
         default: 'default-product.jpg'
     },
+    avgRating: {
+        type: Number,
+        default: 0,
+        min: 0,
+        max: 5
+    },
+    reviewCount: {
+        type: Number,
+        default: 0
+    },
     createdAt: {
         type: Date,
         default: Date.now
     }
 }, {
-    timestamps: true
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true }
+});
+
+productSchema.virtual('reviews', {
+    ref: 'Review',
+    localField: '_id',
+    foreignField: 'productId'
 });
 
 const Product = mongoose.model('Product', productSchema);

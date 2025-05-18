@@ -67,7 +67,7 @@ Object.entries(services).forEach(([service, config]) => {
         onProxyReq: (proxyReq, req, res) => {
             // Safe access to req.path with fallback
             const path = req.path || req.url || '';
-            console.log(`Proxying ${req.method} request to: ${config.url}${path.replace(new RegExp(`^/api/${service}`), '')}`);
+            console.log(`🔄 Proxying ${req.method} request to: ${config.url}${path.replace(new RegExp(`^/api/${service}`), '')}`);
             // If body is JSON and already parsed, stringify it again
             if (req.body && req.method !== 'GET') {
                 const bodyData = JSON.stringify(req.body);
@@ -78,7 +78,8 @@ Object.entries(services).forEach(([service, config]) => {
             }
         },
         onProxyRes: (proxyRes, req, res) => {
-            console.log(`Received response from ${req.method} ${req.path}: Status ${proxyRes.statusCode}`);
+            const statusColor = proxyRes.statusCode < 400 ? '\x1b[32m' : '\x1b[31m'; // green or red
+            console.log(`${statusColor}✓\x1b[0m Response from ${req.method} ${req.path}: Status ${proxyRes.statusCode}`);
             // Log the first part of the response
             let responseBody = '';
             const originalWrite = res.write;
@@ -93,7 +94,11 @@ Object.entries(services).forEach(([service, config]) => {
                 if (chunk) {
                     responseBody += chunk.toString('utf8');
                 }
-                console.log(`Response body sample: ${responseBody.substring(0, 200)}...`);
+                if (proxyRes.statusCode >= 400) {
+                    console.log(`⚠️ Error response: ${responseBody.substring(0, 500)}...`);
+                } else {
+                    console.log(`✅ Response body sample (${service}): ${responseBody.substring(0, 200)}...`);
+                }
                 originalEnd.apply(res, arguments);
             };
         },

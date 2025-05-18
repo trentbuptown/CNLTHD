@@ -23,7 +23,7 @@ const paymentSchema = new mongoose.Schema({
     method: {
         type: String,
         required: true,
-        enum: ['credit_card', 'paypal', 'bank_transfer']
+        enum: ['credit_card', 'paypal', 'bank_transfer', 'vnpay', 'cod']
     },
     status: {
         type: String,
@@ -37,6 +37,33 @@ const paymentSchema = new mongoose.Schema({
     paymentIntentId: {
         type: String
     },
+    customerInfo: {
+        name: { type: String },
+        email: { type: String },
+        phone: { type: String },
+        address: {
+            street: { type: String },
+            city: { type: String },
+            state: { type: String },
+            postalCode: { type: String },
+            country: { type: String }
+        }
+    },
+    cardDetails: {
+        last4: { type: String },
+        brand: { type: String },
+        expiryMonth: { type: Number },
+        expiryYear: { type: Number }
+    },
+    bankDetails: {
+        bankName: { type: String },
+        accountType: { type: String },
+        transactionReference: { type: String }
+    },
+    paymentResponseCode: { type: String },
+    paymentResponseMessage: { type: String },
+    gatewayReference: { type: String },
+    gatewayResponse: { type: Object },
     paymentDetails: {
         type: Object
     }
